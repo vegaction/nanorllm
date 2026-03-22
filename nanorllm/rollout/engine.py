@@ -23,11 +23,14 @@ class RolloutEngine:
 
             action = agent.update_from_model(model_output['text'])
             observation, reward, done, info = env.step(action)
-            
+            if i == args.max_steps - 1 and not done:
+                info = info or {}
+                info['termination_reason'] = 'max_step'
+                
             agent.update_from_env(observation, reward, done, info)
             if done:
-                agent.trajectory.terminated=True
                 break
+            
         if not agent.trajectory.terminated:
             agent.trajectory.termination_reason = 'max step'
             agent.trajectory.terminated = True

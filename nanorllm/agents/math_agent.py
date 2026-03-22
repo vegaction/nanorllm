@@ -24,13 +24,17 @@ class MathAgent(BaseAgent):
             last_step.done = done
             last_step.info = info
             
+        termination_reason = info.get('termination_reason') if info else None
 
-        if done:
+        if done or termination_reason is not None:
             self._trajectory.final_reward = reward
             self._trajectory.terminated = True
-            self._trajectory.termination_reason = info.get('termination_reason', 'env_done')
+            if not termination_reason:
+                self._trajectory.termination_reason = termination_reason
+            else:                
+                self._trajectory.termination_reason = 'done' if done else 'unknown'
             return
-        
+
         user_message = self._format_observation(observation)
         self._messages.append({'role': "user", "content": user_message})
         if self._trajectory.task_id is None and info:
