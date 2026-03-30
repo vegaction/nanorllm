@@ -29,10 +29,7 @@ class MathAgent(BaseAgent):
         if done or termination_reason is not None:
             self._trajectory.final_reward = reward
             self._trajectory.terminated = True
-            if not termination_reason:
-                self._trajectory.termination_reason = termination_reason
-            else:                
-                self._trajectory.termination_reason = 'done' if done else 'unknown'
+            self._trajectory.termination_reason = termination_reason or ('done' if done else 'unknown')
             return
 
         user_message = self._format_observation(observation)

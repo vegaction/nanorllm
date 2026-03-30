@@ -11,12 +11,13 @@
 当前唯一主入口是 [examples/train_math_grpo.py](/Users/sl/caitian/nanorllm/examples/train_math_grpo.py)。
 
 当前主 demo 固定为 `multi-turn math self-refine`。
+这条主路径属于典型的 cumulative chat agent 设定，因此 `prefix-compatible-episode-as-sequence` 在这里是合理默认，而不是冷门特例。
 
 和 `rLLM` 对齐的地方：
 
 - 保留 `agent / env / rollout / trainer` 四层结构
 - 保留 `Trajectory / Step` 作为交互语义对象
-- 让 rollout 额外产出 `StepSample`，供 trainer 消费
+- 让 rollout 额外产出 `EpisodeRollout`，并从中派生训练样本供 trainer 消费
 - 用同题多采样后的 grouped advantage 做最小 GRPO-lite
 
 刻意不做的地方：
@@ -86,11 +87,16 @@ nanorllm/
 - 一个完整 episode 的容器
 - 最小字段包括 `task_id`、`steps`、`final_reward`、`terminated`、`termination_reason`
 
-`StepSample`
+`StepRolloutView`
 
-- 一条 step-level 训练样本
-- 保存 rollout 阶段缓存的 `prompt_ids / response_ids / rollout_logprobs`
-- `advantage` 在 grouped advantage 之后回填到这里，而不是写回 `Step`
+- rollout 阶段记录的一步训练视图
+- 保存 `prompt_ids / response_ids / response_logprobs`
+
+`TrainSample`
+
+- trainer 消费的序列训练样本
+- 当前支持 `step`、`prefix-compatible-episode-as-sequence` 两种视图名
+- `advantage` 写在训练样本上，而不是写回 `Step`
 
 `MathAgent`
 
@@ -107,19 +113,19 @@ nanorllm/
 `RolloutEngine`
 
 - 驱动一条完整 episode
-- 输出 `(Trajectory, list[StepSample])`
+- 输出 `EpisodeRollout`
 
 `GRPO-lite`
 
 - `group_by_task_id`
 - `compute_advantage`
-- `flatten_step_samples`
+- `EpisodeRollout -> TrainSample`
 
 `Trainer`
 
 - 批量收集 rollout
-- 先保留 episode 级 `(trajectory, step_samples)` 绑定关系
-- 再把 grouped advantage 写回对应的 `StepSample`
+- 先保留 episode 级 `EpisodeRollout`
+- 再把 grouped advantage 写回对应的训练视图
 - 组 batch，计算 loss，执行 `optimizer.step()`
 
 ## 任务格式
@@ -161,37 +167,41 @@ nanorllm/
 ```python
 episode_outputs = collect_rollouts(tasks, num_samples_per_task, rollout_fn)
 grouped = group_by_task_id(episode_outputs)
-grouped_with_adv = compute_advantage(grouped)
-samples = flatten_step_samples(grouped_with_adv)
+rollouts = compute_advantage(grouped)
+samples = [
+    transform_episode_samples(rollout, policy.tokenize_messages)
+    for rollout in rollouts
+]
 batch = collate_train_batch(samples, tokenizer, args)
-outputs = policy.forward(batch["input_ids"], batch["attention_mask"])
-loss = compute_policy_loss(outputs.logits, batch, args)
+logits = policy.forward(batch["input_ids"], batch["attention_mask"])
+loss = compute_policy_loss(logits, batch, args)
 ```
 
 当前 rollout 的最小 episode 输出形态是：
 
 ```python
-(
-    trajectory,
-    [
-        StepSample(...),
-        StepSample(...),
+EpisodeRollout(
+    trajectory=...,
+    step_views=[
+        StepRolloutView(...),
+        StepRolloutView(...),
     ],
 )
 ```
 
-当前 step-level sample 只有一种主形态：
+当前 trainer 消费的主样本形态是：
 
 ```python
-StepSample(
-    prompt_ids=...,
-    response_ids=...,
-    rollout_logprobs=...,
+TrainSample(
+    input_ids=...,
+    loss_mask=...,
+    old_logprobs=...,
     advantage=0.5,
+    view_kind="prefix-compatible-episode-as-sequence",
 )
 ```
 
-也就是说，当前 trainer 主线依赖 rollout 阶段预先缓存好的 token ids 和 old logprobs，但这些训练字段不再挂在 `Step` 上，而是走单独的 `StepSample` 训练线。
+也就是说，当前 trainer 主线依赖 rollout 阶段预先缓存好的 token ids 和 old logprobs，但这些训练字段不再挂在 `Step` 上，而是走单独的训练样本视图。
 
 ## 设计边界
 
@@ -199,14 +209,14 @@ StepSample(
 
 - `agent` 只关心对话状态和 trajectory 写入
 - `env` 只关心环境转移和 reward
-- `rollout engine` 负责 episode 循环，并额外产出该 episode 对应的 `StepSample`
+- `rollout engine` 负责 episode 循环，并额外产出该 episode 对应的 `StepRolloutView`
 - `trainer` 只关心 `episode_outputs -> grouped advantage -> batch -> loss -> step`
 
 当前保留的一个现实折中是：
 
-- rollout 的训练事实和交互语义仍然绑定在同一条 episode 输出上，但已经拆成 `Trajectory` 和 `StepSample` 两条视图
+- rollout 的训练事实和交互语义仍然绑定在同一条 episode 输出上，但已经拆成 `Trajectory`、`StepRolloutView` 和 `TrainSample` 三条视图
 
-这样做的目的是先把最小训练闭环跑稳，同时保留 `trajectory -> its step_samples` 的归属关系；如果后面要进一步向 `rLLM` 的分层靠拢，再把这层 episode 输出收成更明确的 `RolloutResult`/`TokenTrajectory`。
+这样做的目的是先把最小训练闭环跑稳，同时保留 `trajectory -> its step_views / train samples` 的归属关系；如果后面要进一步向 `rLLM` 的分层靠拢，再把这层 episode 输出收成更明确的 `RolloutResult`/`TokenTrajectory`。
 
 ## 目前已经有的训练能力
 
@@ -234,9 +244,9 @@ StepSample(
 
 ### Phase 1: 把 rollout 数据边界再收紧
 
-- 给 episode 输出增加一个更明确的类型名，例如 `RolloutResult`
-- 把 `(trajectory, step_samples)` 从 tuple 收成一个具名对象
-- 让 trainer 只依赖这层 episode 结果，而不是依赖 tuple 位置语义
+- 固定 `EpisodeRollout -> TrainSample` 的最小契约
+- 明确当前默认训练视图是 `prefix-compatible-episode-as-sequence`
+- 继续把 `step` / `prefix-compatible-episode-as-sequence` 的适用边界写清楚
 
 ### Phase 2: 把配置从脚本里拿出来
 

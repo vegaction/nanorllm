@@ -67,12 +67,19 @@ def build_samples_from_episode_outputs(
         grouped_episode_outputs
     )
     samples = []
-    if args.mode == 'step':
+    if args.mode in {'step', 'step_as_sequence'}:
         for rollout in rollouts:
             samples.extend(transform_step_samples(rollout)) 
-    elif args.mode == 'token':
+    elif args.mode in {
+        'prefix-compatible-episode-as-sequence',
+        'prefix_episode',
+        'token',
+        'episode',
+    }:
         for rollout in rollouts:
             samples.append(transform_episode_samples(rollout, policy.tokenize_messages)) 
+    else:
+        raise ValueError(f"Unsupported training view mode: {args.mode}")
     return samples
 
 
@@ -125,7 +132,7 @@ def run_train_epoch(
     episode_outputs = collect_rollouts(tasks, args.num_samples_per_task, rollout_fn)
     logger.info("Collected %s episode rollouts", len(episode_outputs))
     samples = build_samples_from_episode_outputs(episode_outputs, policy, args)
-    logger.info("Built %s step samples", len(samples))
+    logger.info("Built %s train samples for mode=%s", len(samples), args.mode)
     train_start = time.perf_counter()
 
     minibatch_metrics = []

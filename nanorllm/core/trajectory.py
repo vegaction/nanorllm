@@ -47,5 +47,11 @@ class TrainSample:
     loss_mask: torch.Tensor | None = None
     old_logprobs: torch.Tensor | None = None
     advantage: float | None = None
-    view: Literal["step", "episode"] | None = None
+    view_kind: Literal["step", "prefix-compatible-episode-as-sequence"] | None = None
     task_id: str | None = None
+    step_index: int | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def view(self) -> Literal["step", "prefix-compatible-episode-as-sequence"] | None:
+        return self.view_kind

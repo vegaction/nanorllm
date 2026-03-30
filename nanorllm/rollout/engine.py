@@ -2,6 +2,9 @@ from nanorllm.core.trajectory import StepRolloutView, EpisodeRollout
 import torch
 
 
+TERMINATION_REASON_MAX_STEPS = "max_steps"
+
+
 class RolloutEngine:
     def run_episode(self, agent, env, llm, task, args):
         '''
@@ -19,20 +22,26 @@ class RolloutEngine:
         step_model_outputs = []
         for i in range(args.max_steps):
             model_output = llm.generate(agent.messages, args)
-            step_model_outputs.append(StepRolloutView(prompt_ids=model_output['prompt_ids'], response_ids=model_output['response_ids'], response_logprobs=model_output['response_logprobs']))
+            step_model_outputs.append(
+                StepRolloutView(
+                    prompt_ids=model_output['prompt_ids'],
+                    response_ids=model_output['response_ids'],
+                    response_logprobs=model_output['response_logprobs'],
+                )
+            )
 
             action = agent.update_from_model(model_output['text'])
             observation, reward, done, info = env.step(action)
             if i == args.max_steps - 1 and not done:
                 info = info or {}
-                info['termination_reason'] = 'max_step'
+                info['termination_reason'] = TERMINATION_REASON_MAX_STEPS
                 
             agent.update_from_env(observation, reward, done, info)
             if done:
                 break
             
         if not agent.trajectory.terminated:
-            agent.trajectory.termination_reason = 'max step'
+            agent.trajectory.termination_reason = TERMINATION_REASON_MAX_STEPS
             agent.trajectory.terminated = True
 
         return EpisodeRollout(trajectory=agent.trajectory, 

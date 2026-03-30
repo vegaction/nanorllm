@@ -4,7 +4,6 @@ import time
 from pathlib import Path
 import torch
 from dataclasses import dataclass
-from pathlib import Path
 
 import json
 
@@ -61,7 +60,7 @@ class TrainArgs:
     lr: float = 1e-5
     train_batch_size: int = 3
     loss_agg_mode: str = 'seq-mean-token-mean'
-    mode:str = 'token'
+    mode:str = 'prefix-compatible-episode-as-sequence'
 
 logger.info("Initializing training run")
 args = TrainArgs()
@@ -72,7 +71,7 @@ env = MathEnv(reward_fn=math_reward, max_turn=args.max_turn)
 load_start = time.perf_counter()
 policy = HFCausalPolicy(model_name=args.model_name, device=args.device)
 logger.info("Policy loaded in %.2fs", time.perf_counter() - load_start)
-tokenizer = policy._tokenizer
+tokenizer = policy.tokenizer
 optimizer = torch.optim.AdamW(policy.parameters(), lr=args.lr)
 
 def rollout_fn(task):
