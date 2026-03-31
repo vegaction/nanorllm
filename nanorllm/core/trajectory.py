@@ -15,8 +15,6 @@ class Step:
     info: dict[str, Any] = field(default_factory=dict) # 能兼容更多env metadata info，方便调试
 
 
-
-
 @dataclass
 class Trajectory:
     task_id: str | None = None

@@ -10,7 +10,7 @@
 
 ## 这是什么
 
-`nanorllm` 不是完整复刻 `rLLM`，而是把最值得先跑通的一条链路压缩成一个可以读、可以跑、可以改的小版本。
+`nanorllm` 不是完整复刻 [`rllm`](https://github.com/agentica-project/rllm)，而是把最值得先跑通的一条链路压缩成一个可以读、可以跑、可以改的小版本。
 
 当前 demo 是：
 
@@ -295,3 +295,9 @@ nanorllm/
 1. 先跑 [examples/train_math_grpo.py](/Users/sl/caitian/nanorllm/examples/train_math_grpo.py)
 2. 再看 [nanorllm/rollout/engine.py](/Users/sl/caitian/nanorllm/nanorllm/rollout/engine.py)
 3. 最后看 [nanorllm/trainer/collate.py](/Users/sl/caitian/nanorllm/nanorllm/trainer/collate.py) 和 [nanorllm/trainer/trainer.py](/Users/sl/caitian/nanorllm/nanorllm/trainer/trainer.py)
+
+## 致谢
+
+这个仓库的很多思路来自对 [`rllm`](https://github.com/agentica-project/rllm) 的学习和拆解。
+
+感谢 `rllm` 项目把 agentic RL 的关键问题、对象分层和训练主链路做了很有启发性的工程化表达，也给了这个 `nanorllm` 一个很明确的出发点。
