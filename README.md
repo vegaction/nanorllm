@@ -1,150 +1,185 @@
 # nanorllm
 
-最小化复现 `agentic RL` 的核心闭环，当前只保留一条真实主路径：
+一个尽量小、但仍然保留 `agentic RL` 关键闭环的教学型仓库。
 
-题目 -> multi-turn rollout -> terminal reward -> grouped advantage -> train batch -> policy update
+## 这是什么
 
-这个仓库不是完整复刻 `rLLM`，而是把其中最值得先吃透的那条链路压缩成一个可以读懂、可以跑通、可以改动的小版本。
+`nanorllm` 不是完整复刻 `rLLM`，而是把最值得先跑通的一条链路压缩成一个可以读、可以跑、可以改的小版本。
 
-## 当前定位
+当前唯一主 demo 是：
 
-当前唯一主入口是 [examples/train_math_grpo.py](/Users/sl/caitian/nanorllm/examples/train_math_grpo.py)。
+- `multi-turn math self-refine`
+- 本地 `transformers` causal LM
+- actor-only 的最小 GRPO/PPO-style on-policy 更新
+- 支持把 rollout 导出成可视化 JSON，用浏览器查看整条 trajectory
 
-当前主 demo 固定为 `multi-turn math self-refine`。
-这条主路径属于典型的 cumulative chat agent 设定，因此 `prefix-compatible-episode-as-sequence` 在这里是合理默认，而不是冷门特例。
+## 这不是什么
 
-和 `rLLM` 对齐的地方：
-
-- 保留 `agent / env / rollout / trainer` 四层结构
-- 保留 `Trajectory / Step` 作为交互语义对象
-- 让 rollout 额外产出 `Rollout`，并从中派生训练样本供 trainer 消费
-- 用同题多采样后的 grouped advantage 做最小 GRPO-lite
-
-刻意不做的地方：
+这个仓库刻意不做下面这些事：
 
 - Ray / verl / async worker
 - critic
-- 通用 workflow 系统
+- replay buffer
+- 通用 workflow 编排
 - tool use / search
-- 大规模工程化配置
+- 大规模工程化配置系统
+
+换句话说，它更像一个“最小可解释原型”，不是“可横向扩展的完整训练平台”。
 
 ## 当前主线
 
-现在仓库里只把这一条路径当作主路径：
+现在仓库里真正跑通的是这条链路：
 
-- `HFCausalPolicy` 负责本地 `transformers` causal LM 的前向和采样
-- `MathAgent` 负责维护 messages 和写入 `Trajectory`
-- `MathEnv` 负责判断答案、给 retry feedback、控制 episode 结束
-- `RolloutEngine` 负责驱动 agent-env-policy 循环
-- `execute_tasks` 负责批量 rollout 收集，并补 run metadata
-- `trainer` 负责 `rollouts -> grouped advantage -> collate -> loss -> optimizer.step()`
+1. `MathEnv` 给出题目或 retry feedback
+2. `MathAgent` 维护 messages，并把交互写进 `Trajectory`
+3. `HFCausalPolicy` 基于当前 messages 采样回复
+4. `RolloutEngine` 驱动一条完整 episode，并记录 `StepRolloutView`
+5. `execute_tasks` 对同一题做多次采样，得到一组 `Rollout`
+6. `group_by_task_id + compute_advantage` 计算 grouped advantage
+7. `trainer` 把 rollout 转成 `TrainSample`，再做 loss 和 `optimizer.step()`
 
-当前训练范式是一个最小的 `on-policy` PPO/GRPO-style actor-only loop：
+当前训练范式是最小的 on-policy actor-only loop：
 
 - rollout 由当前 policy 现采
-- `old_logprobs` 来自这次 rollout 时的旧策略
-- trainer 直接在这批新鲜样本上做 clipped ratio 更新
-- 当前没有 replay buffer，也没有长期混用历史策略数据
+- `old_logprobs` 来自 rollout 时的旧策略
+- 采完就训练，不复用长期历史数据
+- 默认训练视图是 `step`
 
-## 目录
+如果你想体验更接近 cumulative chat agent 的训练视图，也可以切到 `prefix-compatible-episode-as-sequence`。
 
-```text
-nanorllm/
-  nanorllm/
-    agents/
-      base.py
-      math_agent.py
-    algos/
-      grpo.py
-    core/
-      trajectory.py
-      types.py
-    datasets/
-      simple_math.py
-    envs/
-      base.py
-      math_env.py
-    policy/
-      base.py
-      hf_causal.py
-    rollout/
-      collector.py
-      engine.py
-    trainer/
-      collate.py
-      loss.py
-      trainer.py
-    utils/
-      util.py
-  examples/
-    train_math_grpo.py
+## 适合谁
+
+这个项目尤其适合下面几类场景：
+
+- 想快速理解 agentic RL 的最小数据流
+- 想在一个很小的代码库里改 reward / env / rollout / loss
+- 想把“多轮对话轨迹”和“训练 token 视图”拆开理解
+- 想做一个可控、可调试、可视化的 math self-refine 实验
+
+## 快速开始
+
+### 1. 环境准备
+
+要求：
+
+- Python `3.11` 到 `3.13`
+- 首次运行需要能下载 Hugging Face 模型
+
+创建虚拟环境并安装依赖：
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -U pip
+pip install -e ".[dev]"
 ```
+
+默认依赖很少：
+
+- `torch`
+- `transformers`
+- `python-dotenv`
+- `pytest`（开发依赖）
+
+### 2. 运行主示例
+
+```bash
+.venv/bin/python examples/train_math_grpo.py
+```
+
+默认配置在 [examples/train_math_grpo.py](/Users/sl/caitian/nanorllm/examples/train_math_grpo.py) 里：
+
+- 模型：`HuggingFaceTB/SmolLM2-135M-Instruct`
+- 设备：`cpu`
+- 每题采样数：`2`
+- 最大 rollout step 数：`5`
+- 默认训练视图：`step`
+
+### 3. 你会得到什么
+
+运行结束后，通常会看到两类产物：
+
+- 训练日志：包括 rollout 收集、样本数、loss、平均 advantage
+- 轨迹导出：`docs/exported_trajectories.json`
+
+这个 JSON 可以直接喂给 viewer 查看：
+
+1. 用浏览器打开 [docs/trajectory_viewer.html](/Users/sl/caitian/nanorllm/docs/trajectory_viewer.html)
+2. 选择 `docs/exported_trajectories.json`
+
+viewer 的输入格式说明在 [docs/trajectory_viewer_README.md](/Users/sl/caitian/nanorllm/docs/trajectory_viewer_README.md)。
+
+## 最小运行流程
+
+主入口的训练逻辑可以近似理解成：
+
+```python
+rollouts = execute_tasks(tasks, args.num_samples_per_task, rollout_fn)
+samples = build_samples_from_rollouts(rollouts, policy, args)
+batch = collate_train_batch(samples, tokenizer, args, device=policy.device)
+logits = policy.forward(batch["input_ids"], batch["attention_mask"])
+loss = compute_policy_loss(logits, batch, args)
+loss.backward()
+optimizer.step()
+```
+
+其中最重要的不是“公式有多复杂”，而是这几层边界是清楚的：
+
+- `agent` 管对话状态和 trajectory 写入
+- `env` 管环境转移和 reward
+- `rollout` 管 episode 采样
+- `trainer` 管训练视图、batch、loss 和优化
 
 ## 核心对象
 
 `Step`
 
 - 一轮 `observation -> model_response/action -> env feedback` 的记录单元
-- 只保留交互语义，不直接存训练用 token/logprob 字段
+- 只保留交互语义，不直接承载训练 token 字段
 
 `Trajectory`
 
 - 一个完整 episode 的容器
-- 最小字段包括 `task_id`、`steps`、`final_reward`、`terminated`、`termination_reason`
+- 包含 `task_id`、`steps`、`final_reward`、`terminated`、`termination_reason`
 
 `StepRolloutView`
 
 - rollout 阶段记录的一步训练视图
-- 保存 `prompt_ids / response_ids / response_logprobs`
+- 保存 `prompt_ids`、`response_ids`、`response_logprobs`
 
 `Rollout`
 
 - rollout/collector 对 trainer 的统一输出对象
-- 绑定 `trajectory`、`step_views`、原始 `task`
+- 绑定 `trajectory`、`step_views`、`task`
 - 允许挂载 `run_id`、`stats`、`timing` 这类收集侧 metadata
 
 `TrainSample`
 
-- trainer 消费的序列训练样本
-- 当前支持 `step`、`prefix-compatible-episode-as-sequence` 两种视图名
-- `advantage` 写在训练样本上，而不是写回 `Step`
+- trainer 最终消费的训练样本
+- 当前支持两种视图：`step` 和 `prefix-compatible-episode-as-sequence`
 
-`MathAgent`
+## 两种训练视图
 
-- 维护对话历史
-- 把 env observation 和 model response 写入当前 `Trajectory`
-- 不做 reward 判断
+### `step`
 
-`MathEnv`
+默认模式，也是当前最直接的训练视图。
 
-- 提供题目
-- 检查 `\boxed{...}` 中的答案
-- 回答错误时返回 retry feedback
+- 每个 step 生成一个训练样本
+- `input_ids = prompt_ids + response_ids`
+- loss 只打在当前 response token 上
+- 最容易观察和调试
 
-`RolloutEngine`
+### `prefix-compatible-episode-as-sequence`
 
-- 驱动一条完整 episode
-- 输出 `Rollout`
+更接近 cumulative chat agent 的整段序列训练视图。
 
-`execute_tasks`
+- 一个 episode 只生成一个训练样本
+- 要求每一步 prompt 都是最终 prompt 的前缀
+- 用最后一步的完整上下文拼出整条训练序列
 
-- 批量执行 `tasks x num_samples_per_task`
-- 调用 `rollout_fn(task)` 收集 `Rollout`
-- 为每条 rollout 补 `run_id / stats / timing`
+当前示例默认还是 `step`。如果你要切换，可以改 [examples/train_math_grpo.py](/Users/sl/caitian/nanorllm/examples/train_math_grpo.py) 里的 `TrainArgs.mode`。
 
-`GRPO-lite`
-
-- `group_by_task_id`
-- `compute_advantage`
-- `Rollout -> TrainSample`
-
-`Trainer`
-
-- 消费 collector 产出的 `Rollout`
-- 再把 grouped advantage 写回对应的训练视图
-- 组 batch，计算 loss，执行 `optimizer.step()`
-
-## 任务格式
+## 任务与环境约定
 
 当前 task schema 固定为：
 
@@ -156,144 +191,105 @@ nanorllm/
 }
 ```
 
-环境规则固定为：
+当前环境规则：
 
 - `reset(task)` 返回 `{"question": ...}`
-- 回答正确：`done=True, reward=1.0`
-- 回答错误且未超轮数：`done=False, reward=0.0`，返回 retry feedback
-- 最后一轮仍错误：`done=True, reward=0.0`
+- 回答正确：`done=True, reward=1`
+- 回答错误且未超轮数：`done=False, reward=0`
+- 超过最大轮数仍错误：`done=True, reward=0`
 
-## 运行
+reward 判定由 [nanorllm/rewards/math_reward.py](/Users/sl/caitian/nanorllm/nanorllm/rewards/math_reward.py) 负责，支持：
 
-先确保：
+- 从 `\boxed{...}` 抽取答案
+- 兼容 `\box{...}` 别名
+- 对纯文本数值答案做标准化，例如 `39.0 -> 39`
 
-- 已创建虚拟环境 `.venv`
-- 已安装依赖
+## 项目结构
 
-运行主入口：
+```text
+nanorllm/
+  datasets/
+    simple_math.py
+  docs/
+    trajectory_viewer.html
+    trajectory_viewer_README.md
+  examples/
+    train_math_grpo.py
+  nanorllm/
+    agents/
+      base.py
+      math_agent.py
+    algos/
+      grpo.py
+    core/
+      trajectory.py
+      types.py
+    envs/
+      base.py
+      math_env.py
+    policy/
+      base.py
+      hf_causal.py
+    rewards/
+      base.py
+      math_reward.py
+    rollout/
+      collector.py
+      engine.py
+    trainer/
+      collate.py
+      loss.py
+      trainer.py
+    utils/
+      util.py
+  tests/
+```
+
+建议从这些文件开始读：
+
+- [examples/train_math_grpo.py](/Users/sl/caitian/nanorllm/examples/train_math_grpo.py)：主入口
+- [nanorllm/rollout/engine.py](/Users/sl/caitian/nanorllm/nanorllm/rollout/engine.py)：单条 episode 怎么跑
+- [nanorllm/trainer/trainer.py](/Users/sl/caitian/nanorllm/nanorllm/trainer/trainer.py)：rollout 怎么变成训练
+- [nanorllm/trainer/collate.py](/Users/sl/caitian/nanorllm/nanorllm/trainer/collate.py)：两种训练视图的关键实现
+- [nanorllm/rewards/math_reward.py](/Users/sl/caitian/nanorllm/nanorllm/rewards/math_reward.py)：答案抽取与 reward
+
+## 测试
+
+运行测试：
 
 ```bash
-.venv/bin/python examples/train_math_grpo.py
+.venv/bin/pytest
 ```
 
-## 数据流
+当前测试主要覆盖：
 
-当前最小训练流程：
-
-```python
-rollouts = execute_tasks(tasks, num_samples_per_task, rollout_fn)
-grouped = group_by_task_id(rollouts)
-rollouts = compute_advantage(grouped)
-samples = [
-    transform_episode_samples(rollout, policy.tokenize_messages)
-    for rollout in rollouts
-]
-batch = collate_train_batch(samples, tokenizer, args)
-logits = policy.forward(batch["input_ids"], batch["attention_mask"])
-loss = compute_policy_loss(logits, batch, args)
-```
-
-当前 rollout 的最小 episode 输出形态是：
-
-```python
-Rollout(
-    trajectory=...,
-    step_views=[
-        StepRolloutView(...),
-        StepRolloutView(...),
-    ],
-    run_id="gsm8k-001_sample1",
-    stats={"num_steps": 2, ...},
-    timing={"rollout_time": 1.23},
-)
-```
-
-当前 trainer 消费的主样本形态是：
-
-```python
-TrainSample(
-    input_ids=...,
-    loss_mask=...,
-    old_logprobs=...,
-    advantage=0.5,
-    view_kind="prefix-compatible-episode-as-sequence",
-)
-```
-
-也就是说，当前 trainer 主线依赖 rollout 阶段预先缓存好的 token ids 和 old logprobs，但这些训练字段不再挂在 `Step` 上，而是走单独的训练样本视图。
-
-从训练范式上看，这里更接近“单轮采样后立刻更新”的最小 on-policy loop，而不是 off-policy / replay-buffer 风格的数据复用。
+- rollout engine 的终止行为
+- math reward 的答案抽取与标准化
+- `step` / `prefix-compatible-episode-as-sequence` 两种训练视图
+- collector 的批量 rollout 行为
 
 ## 设计边界
 
-当前边界是：
+这个仓库保留了一个很现实的折中：
 
-- `agent` 只关心对话状态和 trajectory 写入
-- `env` 只关心环境转移和 reward
-- `rollout engine` 负责 episode 循环，并额外产出该 episode 对应的 `StepRolloutView`
-- `collector` 负责批量执行 task、重复采样、补 run metadata
-- `trainer` 只关心 `rollouts -> grouped advantage -> batch -> loss -> step`
+- 交互语义走 `Trajectory`
+- rollout 时的 token 级训练事实走 `StepRolloutView`
+- trainer 真正吃进去的批数据走 `TrainSample`
 
-当前保留的一个现实折中是：
+也就是说，交互记录和训练记录仍然来自同一条 episode，但它们已经是三条清晰分离的视图，不再混在同一个 `Step` 对象里。
 
-- rollout 的训练事实和交互语义仍然绑定在同一条 episode 输出上，但已经拆成 `Trajectory`、`StepRolloutView` 和 `TrainSample` 三条视图
+## 下一步可以怎么改
 
-这样做的目的是先把最小训练闭环跑稳，同时保留 `trajectory -> its step_views / train samples` 的归属关系；如果后面要进一步向 `rLLM` 的分层靠拢，再把这层 episode 输出收成更明确的 `RolloutResult`/`TokenTrajectory`。
+如果你准备在这个仓库上继续实验，通常有几个自然方向：
 
-## 目前已经有的训练能力
+- 换 reward 规则，观察 self-refine 行为变化
+- 改 task 数据集，不局限于简单算术
+- 把默认训练视图从 `step` 切到 episode 级视图
+- 增加更多 rollout metadata，配合 viewer 调试
+- 引入更完整的 PPO/GRPO 训练细节
 
-- grouped advantage
-- response-only loss mask
-- old logprobs
-- clipped policy objective
-- 可选 KL 项
+如果你只想先读懂一遍代码，最短路径是：
 
-所以现在更准确的说法不是“纯最小 REINFORCE”，而是“一个很小的 PPO/GRPO-like 训练闭环”。
-
-## 当前不做的事
-
-- async rollout
-- actor / learner 解耦
-- distributed training
-- replay / buffer 系统
-- checkpoint / resume
-- 通用 config 系统
-- 多环境 / 多 agent 抽象
-
-## 建议的下一步
-
-按这个顺序继续最顺：
-
-### Phase 1: 收紧 collector 和 rollout 契约
-
-- 固定 `execute_tasks(...) -> list[Rollout]` 这层接口
-- 明确 `run_id / stats / timing / task` 哪些字段属于 collector 输出契约
-- 固定 `Rollout -> TrainSample` 的最小契约
-- 明确当前默认训练视图是 `prefix-compatible-episode-as-sequence`
-- 继续把 `step` / `prefix-compatible-episode-as-sequence` 的适用边界写清楚
-
-### Phase 2: 把配置从脚本里拿出来
-
-- 增加一个最小 `TrainConfig`
-- 把 model name、lr、max_steps、max_new_tokens、num_samples_per_task 收进 config
-- 让 [examples/train_math_grpo.py](/Users/sl/caitian/nanorllm/examples/train_math_grpo.py) 只负责组装依赖和启动
-
-### Phase 3: 补可解释性和调试能力
-
-- 打印每条 trajectory 的 question / response / reward / advantage
-- 在 train step 输出 `avg_reward`、`success_rate`
-- 增加一个保存最近 rollout 的 debug dump
-
-### Phase 4: 再决定是否继续向 `rLLM` 靠
-
-如果你想更贴近 `rLLM`：
-
-- 抽 workflow 层
-- 让 agent/env 交互接口更稳定
-- 把 trainer 和 rollout 的耦合再降一层
-
-如果你想更偏教学 demo：
-
-- 保持现在的四层结构
-- 继续把每一层写得更短更直白
-- 用 math 这个 demo 先把 PPO/GRPO 的关键概念讲透
+1. 先跑 [examples/train_math_grpo.py](/Users/sl/caitian/nanorllm/examples/train_math_grpo.py)
+2. 再看 [nanorllm/rollout/engine.py](/Users/sl/caitian/nanorllm/nanorllm/rollout/engine.py)
+3. 最后看 [nanorllm/trainer/collate.py](/Users/sl/caitian/nanorllm/nanorllm/trainer/collate.py) 和 [nanorllm/trainer/trainer.py](/Users/sl/caitian/nanorllm/nanorllm/trainer/trainer.py)
