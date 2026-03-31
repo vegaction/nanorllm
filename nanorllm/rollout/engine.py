@@ -1,4 +1,4 @@
-from nanorllm.core.trajectory import StepRolloutView, EpisodeRollout
+from nanorllm.core.trajectory import StepRolloutView, Rollout
 import torch
 
 
@@ -44,9 +44,10 @@ class RolloutEngine:
             agent.trajectory.termination_reason = TERMINATION_REASON_MAX_STEPS
             agent.trajectory.terminated = True
 
-        return EpisodeRollout(trajectory=agent.trajectory, 
-                              step_views=step_model_outputs,
-                              task=task,
-                              metadata={'env_name': 'MathEnv'},
-                              )
+        return Rollout(
+            trajectory=agent.trajectory,
+            step_views=step_model_outputs,
+            task=task,
+            metadata={'env_name': 'MathEnv'},
+        )
      

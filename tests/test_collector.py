@@ -1,11 +1,11 @@
-from nanorllm.core.trajectory import EpisodeRollout, Step, StepRolloutView, Trajectory
+from nanorllm.core.trajectory import Rollout, Step, StepRolloutView, Trajectory
 from nanorllm.rollout.collector import execute_tasks, stats_rollout
 
 import torch
 
 
 def test_stats_rollout_uses_token_counts_for_prompt_and_response_lengths():
-    rollout = EpisodeRollout(
+    rollout = Rollout(
         trajectory=Trajectory(
             task_id="t1",
             steps=[
@@ -38,7 +38,7 @@ def test_stats_rollout_uses_token_counts_for_prompt_and_response_lengths():
 
 def test_execute_tasks_attaches_run_metadata():
     def rollout_fn(task):
-        return EpisodeRollout(
+        return Rollout(
             trajectory=Trajectory(task_id=task["task_id"], steps=[Step()]),
             step_views=[
                 StepRolloutView(
@@ -51,14 +51,14 @@ def test_execute_tasks_attaches_run_metadata():
 
     tasks = [{"task_id": "gsm8k-001", "question": "1+1", "answer": "2"}]
 
-    episode_outputs = execute_tasks(tasks, num_samples_per_task=2, rollout_fn=rollout_fn)
+    rollouts = execute_tasks(tasks, num_samples_per_task=2, rollout_fn=rollout_fn)
 
-    assert len(episode_outputs) == 2
-    assert episode_outputs[0].run_id == "gsm8k-001_sample1"
-    assert episode_outputs[1].run_id == "gsm8k-001_sample2"
-    assert episode_outputs[0].stats == {
+    assert len(rollouts) == 2
+    assert rollouts[0].run_id == "gsm8k-001_sample1"
+    assert rollouts[1].run_id == "gsm8k-001_sample2"
+    assert rollouts[0].stats == {
         "num_steps": 1,
         "prompt_length": 2,
         "response_length": 1,
     }
-    assert "rollout_time" in episode_outputs[0].timing
+    assert "rollout_time" in rollouts[0].timing

@@ -5,7 +5,7 @@ import torch
 # 一轮agent-env 交互的记录单元
 @dataclass
 class Step:
-    observation: Any = None # 这一步开始时，env给了agent什么输入——env.state。对于math self-refine 来说就是原题/retry feedback
+    observation: Any = None # 这一步开始时，env给了agent什么输入（也可以理解为 env.state）。对于math self-refine 来说就是原题/retry feedback
     prompt_messages: list[dict] | None = None #送进模型的信息
     model_response: str | None = None # 模型训练对象，优化这段输出对应的token概率
     action: Any = None # response 的结构化版本。代表给env的接口，而不是给trainer的文本值
@@ -16,7 +16,7 @@ class Step:
 
 
 
-# rollout/trainer 的交换对象
+
 @dataclass
 class Trajectory:
     task_id: str | None = None
@@ -25,6 +25,7 @@ class Trajectory:
     terminated: bool = False
     termination_reason: str | None = None
 
+# 一次模型采样时训练真正需要的 token 级事实
 @dataclass
 class StepRolloutView:
     prompt_ids: torch.Tensor
@@ -33,13 +34,12 @@ class StepRolloutView:
 
 
 @dataclass
-class EpisodeRollout:
+class Rollout:
     trajectory: Trajectory
     step_views: list[StepRolloutView] = field(default_factory=list)
     task: dict[str, Any] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     advantage: float | None = None
-
 
     run_id: str | None = None
     stats: dict[str, Any] = field(default_factory=dict)

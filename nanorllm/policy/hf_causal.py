@@ -134,34 +134,19 @@ class HFCausalPolicy(BasePolicy):
         add_generation_prompt: bool = True,
     ) -> torch.Tensor:
         if isinstance(prompt_or_messages, str):
-            tokenized = self._tokenizer(
-                prompt_or_messages,
-                add_special_tokens=False,
-                return_tensors="pt",
-            )
+            tokenized = self._tokenizer(prompt_or_messages, add_special_tokens=False, return_tensors="pt")
             return tokenized["input_ids"]
 
         if hasattr(self._tokenizer, "apply_chat_template"):
             tokenized = self._tokenizer.apply_chat_template(
-                prompt_or_messages,
-                tokenize=True,
-                add_generation_prompt=add_generation_prompt,
-                return_tensors="pt",
+                prompt_or_messages, tokenize=True, add_generation_prompt=add_generation_prompt, return_tensors="pt"
             )
             if isinstance(tokenized, torch.Tensor):
                 return tokenized
             return tokenized["input_ids"]
 
-
-        prompt_text = render_messages(
-            prompt_or_messages,
-            add_generation_prompt=add_generation_prompt,
-        )
-        tokenized = self._tokenizer(
-            prompt_text,
-            add_special_tokens=False,
-            return_tensors="pt",
-        )
+        prompt_text = render_messages(prompt_or_messages, add_generation_prompt=add_generation_prompt)
+        tokenized = self._tokenizer(prompt_text, add_special_tokens=False, return_tensors="pt")
         return tokenized["input_ids"]
 
     def forward(
@@ -169,13 +154,13 @@ class HFCausalPolicy(BasePolicy):
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
     ):
-        return self.model(input_ids=input_ids, attention_mask=attention_mask).logits
+        return self._model(input_ids=input_ids, attention_mask=attention_mask).logits
 
 
     def _sample_token(self, logits: torch.Tensor, temperature: float):
         scaled_logits = logits / temperature # 不能忘
         probs = torch.nn.functional.softmax(scaled_logits, dim=-1)
-        token_id = torch.multinomial(probs, num_samples=1)
+        token_id = torch.multinomial(probs, num_samples=1) # 从概率分布中采样一个token，暂时不考虑top-k或top-p等采样策略
         log_probs = torch.nn.functional.log_softmax(scaled_logits, dim=-1)
         token_log_prob = torch.gather(log_probs, index=token_id, dim=-1)
         return token_id, token_log_prob
@@ -184,20 +169,13 @@ class HFCausalPolicy(BasePolicy):
     def generate(self, prompt_or_messages: str | list[dict[str, Any]], args):
         response_ids = []
         response_logprobs = []
-        prompt_ids = self.tokenize_messages(
-            prompt_or_messages,
-            add_generation_prompt=True,
-        )
+        prompt_ids = self.tokenize_messages(prompt_or_messages, add_generation_prompt=True)
         input_ids = prompt_ids.to(self.device)
         attention_mask = torch.ones_like(input_ids, device=self.device)
 
         self.model.eval()
         with torch.no_grad():
-            outputs = self.model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                use_cache=True,
-            )
+            outputs = self._model(input_ids=input_ids, attention_mask=attention_mask, use_cache=True)
             logits = outputs.logits[:, -1, :]
             past_key_values = outputs.past_key_values # kv cache
 
@@ -209,16 +187,8 @@ class HFCausalPolicy(BasePolicy):
                 if token_id.item() == self._tokenizer.eos_token_id:
                     break
 
-                attention_mask = torch.concat(
-                    [attention_mask, torch.ones_like(token_id)],
-                    dim=-1,
-                )
-                outputs = self.model(
-                    input_ids=token_id,
-                    attention_mask=attention_mask,
-                    past_key_values=past_key_values,
-                    use_cache=True,
-                )
+                attention_mask = torch.concat([attention_mask, torch.ones_like(token_id)], dim=-1)
+                outputs = self._model(input_ids=token_id, attention_mask=attention_mask, past_key_values=past_key_values, use_cache=True)
                 logits = outputs.logits[:, -1, :]
                 past_key_values = outputs.past_key_values
 
@@ -231,7 +201,6 @@ class HFCausalPolicy(BasePolicy):
 
         response_ids = response_ids.detach().cpu()
         response_logprobs = response_logprobs.detach().cpu()
-
         prompt_ids = prompt_ids.view(-1).detach().cpu()
         text = self._tokenizer.decode(response_ids, skip_special_tokens=True)
         return {

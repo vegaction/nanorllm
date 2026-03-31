@@ -2,24 +2,24 @@ import logging
 import time
 from typing import Any
 
-from nanorllm.core.trajectory import EpisodeRollout
+from nanorllm.core.trajectory import Rollout
 
 logger = logging.getLogger(__name__)
 
 
-def stats_rollout(episode_rollout: EpisodeRollout) -> dict[str, Any]:
+def stats_rollout(rollout: Rollout) -> dict[str, Any]:
     # Keep prompt/response stats in the same unit: rollout token counts.
-    num_steps = len(episode_rollout.trajectory.steps)
-    prompt_length = sum(int(step_view.prompt_ids.numel()) for step_view in episode_rollout.step_views)
-    response_length = sum(int(step_view.response_ids.numel()) for step_view in episode_rollout.step_views)
+    num_steps = len(rollout.trajectory.steps)
+    prompt_length = sum(int(step_view.prompt_ids.numel()) for step_view in rollout.step_views)
+    response_length = sum(int(step_view.response_ids.numel()) for step_view in rollout.step_views)
     return {
         "num_steps": num_steps,
         "prompt_length": prompt_length,
         "response_length": response_length,
     }
 
-def execute_tasks(tasks, num_samples_per_task, rollout_fn) -> list[EpisodeRollout]:
-    episode_outputs = []
+def execute_tasks(tasks, num_samples_per_task, rollout_fn) -> list[Rollout]:
+    rollouts = []
     total_rollouts = len(tasks) * num_samples_per_task
     rollout_idx = 0
     for  task in tasks:
@@ -37,5 +37,5 @@ def execute_tasks(tasks, num_samples_per_task, rollout_fn) -> list[EpisodeRollou
             rollout_result.run_id = run_id
             rollout_result.stats = stats_rollout(rollout_result)
             rollout_result.timing['rollout_time'] = rollout_time
-            episode_outputs.append(rollout_result)
-    return episode_outputs
+            rollouts.append(rollout_result)
+    return rollouts

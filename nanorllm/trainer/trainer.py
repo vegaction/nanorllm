@@ -2,7 +2,7 @@ import logging
 import time
 
 from nanorllm.algos.grpo import  compute_advantage, group_by_task_id
-from nanorllm.core.trajectory import TrainSample, EpisodeRollout
+from nanorllm.core.trajectory import Rollout
 from nanorllm.trainer.collate import collate_train_batch, transform_episode_samples, transform_step_samples
 from nanorllm.trainer.loss import compute_policy_loss
 from nanorllm.rollout.collector import execute_tasks
@@ -12,26 +12,21 @@ logger = logging.getLogger(__name__)
 
 
 
-def build_samples_from_episode_outputs(
-    episode_outputs: list[EpisodeRollout],
+def build_samples_from_rollouts(
+    rollouts: list[Rollout],
     policy,
     args):
   
-    grouped_episode_outputs = group_by_task_id(episode_outputs)
-    rollouts = compute_advantage(
-        grouped_episode_outputs
+    grouped_rollouts = group_by_task_id(rollouts)
+    training_rollouts = compute_advantage(
+        grouped_rollouts
     )
     samples = []
-    if args.mode in {'step', 'step_as_sequence'}:
-        for rollout in rollouts:
+    if args.mode == 'step':
+        for rollout in training_rollouts:
             samples.extend(transform_step_samples(rollout)) 
-    elif args.mode in {
-        'prefix-compatible-episode-as-sequence',
-        'prefix_episode',
-        'token',
-        'episode',
-    }:
-        for rollout in rollouts:
+    elif args.mode == 'prefix-compatible-episode-as-sequence':
+        for rollout in training_rollouts:
             samples.append(transform_episode_samples(rollout, policy.tokenize_messages)) 
     else:
         raise ValueError(f"Unsupported training view mode: {args.mode}")
@@ -65,9 +60,6 @@ def iter_minibatches(samples, train_batch_size):
         yield samples[i: i+train_batch_size]
     
 
-
-
-
 def run_train_epoch(
     tasks,
     rollout_fn,
@@ -84,9 +76,9 @@ def run_train_epoch(
         args.max_steps,
         args.max_new_tokens,
     )
-    episode_outputs = execute_tasks(tasks, args.num_samples_per_task, rollout_fn)
-    logger.info("Collected %s episode rollouts", len(episode_outputs))
-    samples = build_samples_from_episode_outputs(episode_outputs, policy, args)
+    rollouts = execute_tasks(tasks, args.num_samples_per_task, rollout_fn)
+    logger.info("Collected %s rollouts", len(rollouts))
+    samples = build_samples_from_rollouts(rollouts, policy, args)
     logger.info("Built %s train samples for mode=%s", len(samples), args.mode)
     train_start = time.perf_counter()
 
@@ -100,9 +92,9 @@ def run_train_epoch(
             time.perf_counter() - train_start,
             metrics,
         )
-        trajectories = [rollout.trajectory for rollout in episode_outputs]
+        trajectories = [rollout.trajectory for rollout in rollouts]
         return {
-            "episode_outputs": episode_outputs,
+            "rollouts": rollouts,
             "trajectories": trajectories,
             "samples": samples,
             "batch": batch,
@@ -134,9 +126,9 @@ def run_train_epoch(
         time.perf_counter() - train_start,
         metrics,
     )
-    trajectories= [rollout.trajectory for rollout in episode_outputs]
+    trajectories= [rollout.trajectory for rollout in rollouts]
     return {
-        "episode_outputs": episode_outputs,
+        "rollouts": rollouts,
         "trajectories": trajectories,
         "samples": samples,
         "batch": batch,

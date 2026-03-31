@@ -37,10 +37,10 @@ def to_jsonable(value):
         return {k: to_jsonable(v) for k, v in value.__dict__.items()}
     return value
 
-def rollout_to_viewer_json(episode_outputs):
+def rollout_to_viewer_json(rollouts):
     trajectories = []
 
-    for sample_index_global, rollout in enumerate(episode_outputs):
+    for sample_index_global, rollout in enumerate(rollouts):
         trajectory = rollout.trajectory
         task = rollout.task or {}
         step_views = rollout.step_views or []
