@@ -1,6 +1,12 @@
-# nanorllm
+<p align="center">
+  <img src="docs/assets/nanorllm-logo.svg" alt="nanorllm logo" width="720" />
+</p>
 
-一个尽量小、但仍然保留 `agentic RL` 关键闭环的教学型仓库。
+<p align="center">
+  <strong>A minimal, readable playground for agentic RL</strong>
+</p>
+
+一个尽量小、但仍然保留 `agentic RL` 关键闭环的宝藏仓库。
 
 ## 这是什么
 

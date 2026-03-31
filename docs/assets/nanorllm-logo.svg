@@ -1,0 +1,21 @@
+<svg width="960" height="280" viewBox="0 0 960 280" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">nanorllm logo</title>
+  <desc id="desc">A minimal logo for nanorllm with a trajectory-inspired mark and monospaced wordmark.</desc>
+
+  <rect x="36" y="36" width="208" height="208" rx="44" fill="#F4F1E8"/>
+  <rect x="36" y="36" width="208" height="208" rx="44" stroke="#101828" stroke-width="10"/>
+
+  <path d="M76 184H118V144H158V104H198" stroke="#101828" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M82 190L114 158" stroke="#F97316" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="76" cy="184" r="12" fill="#F97316"/>
+  <rect x="172" y="78" width="48" height="48" rx="12" fill="#16A34A"/>
+  <rect x="172" y="78" width="48" height="48" rx="12" stroke="#101828" stroke-width="8"/>
+  <path d="M184 102H208" stroke="#F4F1E8" stroke-width="8" stroke-linecap="round"/>
+
+  <path d="M88 210C110 191 134 182 160 182C185 182 206 190 222 204" stroke="#101828" stroke-width="8" stroke-linecap="round" opacity="0.16"/>
+
+  <text x="284" y="136" fill="#101828" font-family="'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace" font-size="86" font-weight="700" letter-spacing="-3">nanorllm</text>
+  <text x="288" y="184" fill="#475467" font-family="'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="500" letter-spacing="1.2">minimal agentic RL</text>
+
+  <path d="M288 208H596" stroke="#16A34A" stroke-width="8" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,17 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">nanorllm mark</title>
+  <desc id="desc">A square icon mark for nanorllm inspired by rollouts, trajectories, and boxed final answers.</desc>
+
+  <rect x="44" y="44" width="424" height="424" rx="92" fill="#F4F1E8"/>
+  <rect x="44" y="44" width="424" height="424" rx="92" stroke="#101828" stroke-width="20"/>
+
+  <path d="M130 346H214V266H298V186H382" stroke="#101828" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M141 357L206 292" stroke="#F97316" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="130" cy="346" r="24" fill="#F97316"/>
+
+  <rect x="322" y="126" width="92" height="92" rx="22" fill="#16A34A"/>
+  <rect x="322" y="126" width="92" height="92" rx="22" stroke="#101828" stroke-width="16"/>
+  <path d="M348 172H388" stroke="#F4F1E8" stroke-width="16" stroke-linecap="round"/>
+
+  <path d="M154 402C195 361 238 340 285 340C330 340 372 356 404 385" stroke="#101828" stroke-width="16" stroke-linecap="round" opacity="0.16"/>
+</svg>
