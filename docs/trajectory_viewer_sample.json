@@ -1,0 +1,212 @@
+{
+  "meta": {
+    "env_name": "MathEnv",
+    "created_at": "2026-03-19T18:00:00+08:00",
+    "source": "manual-export",
+    "num_trajectories": 3
+  },
+  "trajectories": [
+    {
+      "task_id": "gsm8k-001",
+      "sample_index": 0,
+      "final_reward": 0.0,
+      "terminated": true,
+      "termination_reason": "env_done",
+      "task": {
+        "question": "17 + 28 = ?",
+        "answer": "45"
+      },
+      "steps": [
+        {
+          "index": 0,
+          "observation": {
+            "question": "17 + 28 = ?"
+          },
+          "prompt_messages": [
+            {
+              "role": "system",
+              "content": "You are a careful math problem solver. Think step by step when useful, and end with a clear final answer."
+            },
+            {
+              "role": "user",
+              "content": "17 + 28 = ?"
+            }
+          ],
+          "model_response": "To solve this problem, we first need to find the value",
+          "action": {
+            "value": "To solve this problem, we first need to find the value"
+          },
+          "reward": 0.0,
+          "done": false,
+          "info": {
+            "is_correct": false
+          },
+          "training": {
+            "advantage": 0.0,
+            "prompt_ids": [
+              1,
+              17,
+              28
+            ],
+            "response_ids": [
+              101,
+              102,
+              103
+            ],
+            "rollout_logprobs": [
+              -0.21,
+              -0.45,
+              -0.33
+            ]
+          }
+        },
+        {
+          "index": 1,
+          "observation": {
+            "feedback": "Your previous answer is incorrect. Try again and put the final answer clearly."
+          },
+          "prompt_messages": [
+            {
+              "role": "system",
+              "content": "You are a careful math problem solver. Think step by step when useful, and end with a clear final answer."
+            },
+            {
+              "role": "user",
+              "content": "17 + 28 = ?"
+            },
+            {
+              "role": "assistant",
+              "content": "To solve this problem, we first need to find the value"
+            },
+            {
+              "role": "user",
+              "content": "Your previous answer is incorrect. Try again and put the final answer clearly."
+            }
+          ],
+          "model_response": "17 + 28 = 35<|im_end|>",
+          "action": {
+            "value": "17 + 28 = 35<|im_end|>"
+          },
+          "reward": 0.0,
+          "done": false,
+          "info": {
+            "is_correct": false,
+            "note": "retry"
+          },
+          "training": null
+        },
+        {
+          "index": 2,
+          "observation": {
+            "feedback": "Your previous answer is incorrect. Try again and put the final answer clearly."
+          },
+          "model_response": "17 + 28 = ?<|im_end|>",
+          "action": {
+            "value": "17 + 28 = ?<|im_end|>"
+          },
+          "reward": 0.0,
+          "done": true,
+          "info": {
+            "is_correct": false,
+            "note": "final attempt failed"
+          }
+        }
+      ]
+    },
+    {
+      "task_id": "gsm8k-001",
+      "sample_index": 1,
+      "final_reward": 1.0,
+      "terminated": true,
+      "termination_reason": "env_done",
+      "task": {
+        "question": "17 + 28 = ?",
+        "answer": "45"
+      },
+      "steps": [
+        {
+          "index": 0,
+          "observation": {
+            "question": "17 + 28 = ?"
+          },
+          "prompt_messages": [
+            {
+              "role": "system",
+              "content": "You are a careful math problem solver. Think step by step when useful, and end with a clear final answer."
+            },
+            {
+              "role": "user",
+              "content": "17 + 28 = ?"
+            }
+          ],
+          "model_response": "17 + 28 = 45, so the answer is \\boxed{45}",
+          "action": {
+            "value": "17 + 28 = 45, so the answer is \\boxed{45}"
+          },
+          "reward": 1.0,
+          "done": true,
+          "info": {
+            "is_correct": true
+          },
+          "training": {
+            "advantage": 1.0,
+            "prompt_ids": [
+              1,
+              17,
+              28
+            ],
+            "response_ids": [
+              45,
+              46,
+              47,
+              48
+            ],
+            "rollout_logprobs": [
+              -0.08,
+              -0.12,
+              -0.05,
+              -0.04
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "task_id": "gsm8k-002",
+      "sample_index": 0,
+      "final_reward": 0.0,
+      "terminated": true,
+      "termination_reason": "max_step",
+      "task": {
+        "question": "4 + 4 = ?",
+        "answer": "8"
+      },
+      "steps": [
+        {
+          "index": 0,
+          "observation": {
+            "question": "4 + 4 = ?"
+          },
+          "model_response": "I think it might be \\boxed{8}, or maybe \\boxed{9}.",
+          "action": {
+            "value": "I think it might be \\boxed{8}, or maybe \\boxed{9}."
+          },
+          "reward": 0.0,
+          "done": true,
+          "training": {
+            "advantage": -0.5,
+            "prompt_ids": [],
+            "response_ids": [
+              8,
+              9
+            ],
+            "rollout_logprobs": [
+              -0.91,
+              -1.07
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

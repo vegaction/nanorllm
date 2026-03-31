@@ -36,7 +36,8 @@
 - `MathAgent` 负责维护 messages 和写入 `Trajectory`
 - `MathEnv` 负责判断答案、给 retry feedback、控制 episode 结束
 - `RolloutEngine` 负责驱动 agent-env-policy 循环
-- `trainer` 负责 rollout 收集、advantage、collate、loss、反传
+- `execute_tasks` 负责批量 rollout 收集，并补 run metadata
+- `trainer` 负责 `episode_outputs -> grouped advantage -> collate -> loss -> optimizer.step()`
 
 `nanorllm/llm/gemini.py` 目前保留着，但不是主训练路径的一部分。
 
@@ -64,6 +65,7 @@ nanorllm/
       base.py
       hf_causal.py
     rollout/
+      collector.py
       engine.py
     trainer/
       collate.py
@@ -92,6 +94,12 @@ nanorllm/
 - rollout 阶段记录的一步训练视图
 - 保存 `prompt_ids / response_ids / response_logprobs`
 
+`EpisodeRollout`
+
+- rollout/collector 对 trainer 的统一输出对象
+- 绑定 `trajectory`、`step_views`、原始 `task`
+- 允许挂载 `run_id`、`stats`、`timing` 这类收集侧 metadata
+
 `TrainSample`
 
 - trainer 消费的序列训练样本
@@ -115,6 +123,12 @@ nanorllm/
 - 驱动一条完整 episode
 - 输出 `EpisodeRollout`
 
+`execute_tasks`
+
+- 批量执行 `tasks x num_samples_per_task`
+- 调用 `rollout_fn(task)` 收集 `EpisodeRollout`
+- 为每条 rollout 补 `run_id / stats / timing`
+
 `GRPO-lite`
 
 - `group_by_task_id`
@@ -123,8 +137,7 @@ nanorllm/
 
 `Trainer`
 
-- 批量收集 rollout
-- 先保留 episode 级 `EpisodeRollout`
+- 消费 collector 产出的 `EpisodeRollout`
 - 再把 grouped advantage 写回对应的训练视图
 - 组 batch，计算 loss，执行 `optimizer.step()`
 
@@ -165,7 +178,7 @@ nanorllm/
 当前最小训练流程：
 
 ```python
-episode_outputs = collect_rollouts(tasks, num_samples_per_task, rollout_fn)
+episode_outputs = execute_tasks(tasks, num_samples_per_task, rollout_fn)
 grouped = group_by_task_id(episode_outputs)
 rollouts = compute_advantage(grouped)
 samples = [
@@ -186,6 +199,9 @@ EpisodeRollout(
         StepRolloutView(...),
         StepRolloutView(...),
     ],
+    run_id="gsm8k-001_sample1",
+    stats={"num_steps": 2, ...},
+    timing={"rollout_time": 1.23},
 )
 ```
 
@@ -210,6 +226,7 @@ TrainSample(
 - `agent` 只关心对话状态和 trajectory 写入
 - `env` 只关心环境转移和 reward
 - `rollout engine` 负责 episode 循环，并额外产出该 episode 对应的 `StepRolloutView`
+- `collector` 负责批量执行 task、重复采样、补 run metadata
 - `trainer` 只关心 `episode_outputs -> grouped advantage -> batch -> loss -> step`
 
 当前保留的一个现实折中是：
@@ -242,8 +259,10 @@ TrainSample(
 
 按这个顺序继续最顺：
 
-### Phase 1: 把 rollout 数据边界再收紧
+### Phase 1: 收紧 collector 和 rollout 契约
 
+- 固定 `execute_tasks(...) -> list[EpisodeRollout]` 这层接口
+- 明确 `run_id / stats / timing / task` 哪些字段属于 collector 输出契约
 - 固定 `EpisodeRollout -> TrainSample` 的最小契约
 - 明确当前默认训练视图是 `prefix-compatible-episode-as-sequence`
 - 继续把 `step` / `prefix-compatible-episode-as-sequence` 的适用边界写清楚

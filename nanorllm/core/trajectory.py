@@ -27,9 +27,9 @@ class Trajectory:
 
 @dataclass
 class StepRolloutView:
-    prompt_ids: torch.Tensor | None = None
-    response_ids: torch.Tensor | None = None
-    response_logprobs: torch.Tensor | None = None
+    prompt_ids: torch.Tensor
+    response_ids: torch.Tensor
+    response_logprobs: torch.Tensor
 
 
 @dataclass
@@ -39,6 +39,11 @@ class EpisodeRollout:
     task: dict[str, Any] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     advantage: float | None = None
+
+
+    run_id: str | None = None
+    stats: dict[str, Any] = field(default_factory=dict)
+    timing: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

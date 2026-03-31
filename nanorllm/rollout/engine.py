@@ -47,6 +47,6 @@ class RolloutEngine:
         return EpisodeRollout(trajectory=agent.trajectory, 
                               step_views=step_model_outputs,
                               task=task,
-                              metadata={'env_name': 'MathEnv'}
+                              metadata={'env_name': 'MathEnv'},
                               )
      
