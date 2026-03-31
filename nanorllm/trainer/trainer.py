@@ -5,55 +5,10 @@ from nanorllm.algos.grpo import  compute_advantage, group_by_task_id
 from nanorllm.core.trajectory import TrainSample, EpisodeRollout
 from nanorllm.trainer.collate import collate_train_batch, transform_episode_samples, transform_step_samples
 from nanorllm.trainer.loss import compute_policy_loss
-
+from nanorllm.rollout.collector import execute_tasks
 import torch
 
 logger = logging.getLogger(__name__)
-
-
-def collect_rollouts(tasks, num_samples_per_task, rollout_fn) -> list[EpisodeRollout]:
-    """
-    Collect multi-sample rollout results for each task.
-
-    Each episode output keeps the trajectory-level semantics and the step-level
-    training samples together as `(trajectory, samples)`.
-    """
-    episode_outputs = []
-    total_rollouts = len(tasks) * num_samples_per_task
-    rollout_idx = 0
-    for task_idx, task in enumerate(tasks, start=1):
-        logger.info(
-            "Starting task %s/%s (%s): %s",
-            task_idx,
-            len(tasks),
-            task.get("task_id", "unknown-task"),
-            task["question"],
-        )
-        for sample_idx in range(1, num_samples_per_task + 1):
-            rollout_idx += 1
-            rollout_start = time.perf_counter()
-            logger.info(
-                "Collecting rollout %s/%s for task %s (sample %s/%s)",
-                rollout_idx,
-                total_rollouts,
-                task.get("task_id", "unknown-task"),
-                sample_idx,
-                num_samples_per_task,
-            )
-            rollout_result = rollout_fn(task)
-            episode_outputs.append(rollout_result)
-            rollout_seconds = time.perf_counter() - rollout_start
-            logger.info(
-                "Finished rollout %s/%s in %.2fs: final_reward=%s termination=%s",
-                rollout_idx,
-                total_rollouts,
-                rollout_seconds,
-                rollout_result.trajectory.final_reward,
-                rollout_result.trajectory.termination_reason,
-            )
-        logger.info("Completed task %s/%s", task_idx, len(tasks))
-    return episode_outputs
-
 
 
 
@@ -129,7 +84,7 @@ def run_train_epoch(
         args.max_steps,
         args.max_new_tokens,
     )
-    episode_outputs = collect_rollouts(tasks, args.num_samples_per_task, rollout_fn)
+    episode_outputs = execute_tasks(tasks, args.num_samples_per_task, rollout_fn)
     logger.info("Collected %s episode rollouts", len(episode_outputs))
     samples = build_samples_from_episode_outputs(episode_outputs, policy, args)
     logger.info("Built %s train samples for mode=%s", len(samples), args.mode)
