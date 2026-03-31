@@ -6,25 +6,21 @@ import torch
 from dataclasses import dataclass
 
 import json
-
-# Allow running `python3 examples/run_math_episode.py` from repo root.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
 from nanorllm.rollout.engine import RolloutEngine
 from nanorllm.agents.math_agent import MathAgent
 from nanorllm.envs.math_env import MathEnv
-from nanorllm.datasets.simple_math import get_simple_math_tasks
+
 from nanorllm.trainer.trainer import run_train_epoch
 from nanorllm.policy.hf_causal import HFCausalPolicy
 from nanorllm.rewards.math_reward import math_reward
 from nanorllm.utils.util import rollout_to_viewer_json
 
-"""
-cd /Users/sl/caitian/nanorllm
-source .venv/bin/activate
-python examples/train_math_grpo.py
-"""
+from datasets.simple_math import get_simple_math_tasks
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,41 +56,44 @@ class TrainArgs:
     lr: float = 1e-5
     train_batch_size: int = 3
     loss_agg_mode: str = 'seq-mean-token-mean'
-    mode:str = 'prefix-compatible-episode-as-sequence'
-
-logger.info("Initializing training run")
-args = TrainArgs()
-logger.info("TrainArgs: %s", args)
-engine = RolloutEngine()
-agent = MathAgent(system_prompt=system_prompt)
-env = MathEnv(reward_fn=math_reward, max_turn=args.max_turn)
-load_start = time.perf_counter()
-policy = HFCausalPolicy(model_name=args.model_name, device=args.device)
-logger.info("Policy loaded in %.2fs", time.perf_counter() - load_start)
-tokenizer = policy.tokenizer
-optimizer = torch.optim.AdamW(policy.parameters(), lr=args.lr)
+    mode:str = 'step'
 
 def rollout_fn(task):
     return engine.run_episode(agent, env, policy, task, args)
 
 
+if __name__ == "__main__":
+    logger.info("Initializing training run")
+    args = TrainArgs()
+    logger.info("TrainArgs: %s", args)
+    
+    engine = RolloutEngine()
+    agent = MathAgent(system_prompt=system_prompt)
+    env = MathEnv(reward_fn=math_reward, max_turn=args.max_turn)
+    load_start = time.perf_counter()
+    policy = HFCausalPolicy(model_name=args.model_name, device=args.device)
+    logger.info("Policy loaded in %.2fs", time.perf_counter() - load_start)
+    tokenizer = policy.tokenizer
+    optimizer = torch.optim.AdamW(policy.parameters(), lr=args.lr)
 
-tasks = get_simple_math_tasks()[:2]
-logger.info("Selected %s tasks: %s", len(tasks), [task["task_id"] for task in tasks])
 
-train_start = time.perf_counter()
-result = run_train_epoch(
-    tasks,
-    rollout_fn,
-    policy,
-    tokenizer,
-    optimizer,
-    args
-)
-logger.info("Training run completed in %.2fs", time.perf_counter() - train_start)
-logger.info("Training metrics: %s", result["metrics"])
 
-viewer_data = rollout_to_viewer_json(result["episode_outputs"])
-out_path = Path("docs/exported_trajectories.json")
-out_path.write_text(json.dumps(viewer_data, ensure_ascii=False, indent=2))
-logger.info("Exported viewer data to %s", out_path.resolve())
+    tasks = get_simple_math_tasks()[:2]
+    logger.info("Selected %s tasks: %s", len(tasks), [task["task_id"] for task in tasks])
+
+    train_start = time.perf_counter()
+    result = run_train_epoch(
+        tasks,
+        rollout_fn,
+        policy,
+        tokenizer,
+        optimizer,
+        args
+    )
+    logger.info("Training run completed in %.2fs", time.perf_counter() - train_start)
+    logger.info("Training metrics: %s", result["metrics"])
+
+    viewer_data = rollout_to_viewer_json(result["rollouts"])
+    out_path = Path("docs/exported_trajectories.json")
+    out_path.write_text(json.dumps(viewer_data, ensure_ascii=False, indent=2))
+    logger.info("Exported viewer data to %s", out_path.resolve())

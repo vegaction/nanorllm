@@ -17,7 +17,7 @@
 
 - 保留 `agent / env / rollout / trainer` 四层结构
 - 保留 `Trajectory / Step` 作为交互语义对象
-- 让 rollout 额外产出 `EpisodeRollout`，并从中派生训练样本供 trainer 消费
+- 让 rollout 额外产出 `Rollout`，并从中派生训练样本供 trainer 消费
 - 用同题多采样后的 grouped advantage 做最小 GRPO-lite
 
 刻意不做的地方：
@@ -37,9 +37,14 @@
 - `MathEnv` 负责判断答案、给 retry feedback、控制 episode 结束
 - `RolloutEngine` 负责驱动 agent-env-policy 循环
 - `execute_tasks` 负责批量 rollout 收集，并补 run metadata
-- `trainer` 负责 `episode_outputs -> grouped advantage -> collate -> loss -> optimizer.step()`
+- `trainer` 负责 `rollouts -> grouped advantage -> collate -> loss -> optimizer.step()`
 
-`nanorllm/llm/gemini.py` 目前保留着，但不是主训练路径的一部分。
+当前训练范式是一个最小的 `on-policy` PPO/GRPO-style actor-only loop：
+
+- rollout 由当前 policy 现采
+- `old_logprobs` 来自这次 rollout 时的旧策略
+- trainer 直接在这批新鲜样本上做 clipped ratio 更新
+- 当前没有 replay buffer，也没有长期混用历史策略数据
 
 ## 目录
 
@@ -59,8 +64,6 @@ nanorllm/
     envs/
       base.py
       math_env.py
-    llm/
-      gemini.py
     policy/
       base.py
       hf_causal.py
@@ -94,7 +97,7 @@ nanorllm/
 - rollout 阶段记录的一步训练视图
 - 保存 `prompt_ids / response_ids / response_logprobs`
 
-`EpisodeRollout`
+`Rollout`
 
 - rollout/collector 对 trainer 的统一输出对象
 - 绑定 `trajectory`、`step_views`、原始 `task`
@@ -121,23 +124,23 @@ nanorllm/
 `RolloutEngine`
 
 - 驱动一条完整 episode
-- 输出 `EpisodeRollout`
+- 输出 `Rollout`
 
 `execute_tasks`
 
 - 批量执行 `tasks x num_samples_per_task`
-- 调用 `rollout_fn(task)` 收集 `EpisodeRollout`
+- 调用 `rollout_fn(task)` 收集 `Rollout`
 - 为每条 rollout 补 `run_id / stats / timing`
 
 `GRPO-lite`
 
 - `group_by_task_id`
 - `compute_advantage`
-- `EpisodeRollout -> TrainSample`
+- `Rollout -> TrainSample`
 
 `Trainer`
 
-- 消费 collector 产出的 `EpisodeRollout`
+- 消费 collector 产出的 `Rollout`
 - 再把 grouped advantage 写回对应的训练视图
 - 组 batch，计算 loss，执行 `optimizer.step()`
 
@@ -178,8 +181,8 @@ nanorllm/
 当前最小训练流程：
 
 ```python
-episode_outputs = execute_tasks(tasks, num_samples_per_task, rollout_fn)
-grouped = group_by_task_id(episode_outputs)
+rollouts = execute_tasks(tasks, num_samples_per_task, rollout_fn)
+grouped = group_by_task_id(rollouts)
 rollouts = compute_advantage(grouped)
 samples = [
     transform_episode_samples(rollout, policy.tokenize_messages)
@@ -193,7 +196,7 @@ loss = compute_policy_loss(logits, batch, args)
 当前 rollout 的最小 episode 输出形态是：
 
 ```python
-EpisodeRollout(
+Rollout(
     trajectory=...,
     step_views=[
         StepRolloutView(...),
@@ -219,6 +222,8 @@ TrainSample(
 
 也就是说，当前 trainer 主线依赖 rollout 阶段预先缓存好的 token ids 和 old logprobs，但这些训练字段不再挂在 `Step` 上，而是走单独的训练样本视图。
 
+从训练范式上看，这里更接近“单轮采样后立刻更新”的最小 on-policy loop，而不是 off-policy / replay-buffer 风格的数据复用。
+
 ## 设计边界
 
 当前边界是：
@@ -227,7 +232,7 @@ TrainSample(
 - `env` 只关心环境转移和 reward
 - `rollout engine` 负责 episode 循环，并额外产出该 episode 对应的 `StepRolloutView`
 - `collector` 负责批量执行 task、重复采样、补 run metadata
-- `trainer` 只关心 `episode_outputs -> grouped advantage -> batch -> loss -> step`
+- `trainer` 只关心 `rollouts -> grouped advantage -> batch -> loss -> step`
 
 当前保留的一个现实折中是：
 
@@ -261,9 +266,9 @@ TrainSample(
 
 ### Phase 1: 收紧 collector 和 rollout 契约
 
-- 固定 `execute_tasks(...) -> list[EpisodeRollout]` 这层接口
+- 固定 `execute_tasks(...) -> list[Rollout]` 这层接口
 - 明确 `run_id / stats / timing / task` 哪些字段属于 collector 输出契约
-- 固定 `EpisodeRollout -> TrainSample` 的最小契约
+- 固定 `Rollout -> TrainSample` 的最小契约
 - 明确当前默认训练视图是 `prefix-compatible-episode-as-sequence`
 - 继续把 `step` / `prefix-compatible-episode-as-sequence` 的适用边界写清楚
 

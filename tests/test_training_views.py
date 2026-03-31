@@ -1,6 +1,6 @@
 import torch
 
-from nanorllm.core.trajectory import EpisodeRollout, Step, StepRolloutView, Trajectory
+from nanorllm.core.trajectory import Rollout, Step, StepRolloutView, Trajectory
 from nanorllm.trainer.collate import (
     transform_episode_samples,
     transform_step_samples,
@@ -8,7 +8,7 @@ from nanorllm.trainer.collate import (
 
 
 def test_transform_step_samples_records_step_metadata():
-    rollout = EpisodeRollout(
+    rollout = Rollout(
         trajectory=Trajectory(
             task_id="t2",
             steps=[Step(prompt_messages=[{"role": "user", "content": "q"}])],
@@ -33,7 +33,7 @@ def test_transform_step_samples_records_step_metadata():
 
 
 def test_transform_episode_samples_returns_prefix_compatible_episode_view():
-    rollout = EpisodeRollout(
+    rollout = Rollout(
         trajectory=Trajectory(
             task_id="t3",
             steps=[
