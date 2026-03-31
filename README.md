@@ -12,7 +12,7 @@
 
 `nanorllm` 不是完整复刻 `rLLM`，而是把最值得先跑通的一条链路压缩成一个可以读、可以跑、可以改的小版本。
 
-当前唯一主 demo 是：
+当前 demo 是：
 
 - `multi-turn math self-refine`
 - 本地 `transformers` causal LM
@@ -26,15 +26,12 @@
 - Ray / verl / async worker
 - critic
 - replay buffer
-- 通用 workflow 编排
-- tool use / search
 - 大规模工程化配置系统
 
 换句话说，它更像一个“最小可解释原型”，不是“可横向扩展的完整训练平台”。
 
 ## 当前主线
 
-现在仓库里真正跑通的是这条链路：
 
 1. `MathEnv` 给出题目或 retry feedback
 2. `MathAgent` 维护 messages，并把交互写进 `Trajectory`
@@ -48,7 +45,6 @@
 
 - rollout 由当前 policy 现采
 - `old_logprobs` 来自 rollout 时的旧策略
-- 采完就训练，不复用长期历史数据
 - 默认训练视图是 `step`
 
 如果你想体验更接近 cumulative chat agent 的训练视图，也可以切到 `prefix-compatible-episode-as-sequence`。
@@ -276,11 +272,11 @@ nanorllm/
 
 ## 设计边界
 
-这个仓库保留了一个很现实的折中：
+这个仓库保留了一个很现实的 trade-off：
 
 - 交互语义走 `Trajectory`
 - rollout 时的 token 级训练事实走 `StepRolloutView`
-- trainer 真正吃进去的批数据走 `TrainSample`
+- trainer 真正吃进去的 batch 数据走 `TrainSample`
 
 也就是说，交互记录和训练记录仍然来自同一条 episode，但它们已经是三条清晰分离的视图，不再混在同一个 `Step` 对象里。
 
